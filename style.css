@@ -631,3 +631,47 @@ body {
   .char-grid { grid-template-columns: 1fr; }
   .visual-grid { grid-template-columns: 1fr; }
 }
+
+/* ===== HISTORY PANEL ===== */
+.history-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+.history-card {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: border-color .2s;
+}
+.history-card:hover { border-color: var(--accent); }
+.history-card-icon {
+  font-size: 1.6rem;
+  flex-shrink: 0;
+  width: 42px;
+  text-align: center;
+}
+.history-card-body { flex: 1; min-width: 0; }
+.history-card-idea {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-card-date {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+.history-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}

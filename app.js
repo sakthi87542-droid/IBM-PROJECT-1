@@ -1,6 +1,7 @@
 /* ========================================================
    AI Cinematic Story & Visual Director
    IBM watsonx.ai — Granite Model Integration
+   Supabase — Project Persistence
    ======================================================== */
 
 // ── CONFIG ──────────────────────────────────────────────
@@ -29,6 +30,7 @@ const STATE = {
   camera:      null,
   visual:      null,
   dialogue:    null,
+  dbProjectId: null,   // UUID returned from Supabase after save
   currentTab:  'idea',
   generating:  false,
 };
@@ -42,6 +44,7 @@ const TABS = [
   { id: 'visual',     label: 'Visual Style',icon: '🎨' },
   { id: 'dialogue',   label: 'Dialogue',    icon: '💬' },
   { id: 'plan',       label: 'Final Plan',  icon: '📋' },
+  { id: 'history',    label: 'History',     icon: '🗂' },
 ];
 
 const EXAMPLES = [
@@ -59,6 +62,60 @@ function boot() {
   document.getElementById('app').innerHTML = buildShell();
   attachEvents();
   renderTab('idea');
+}
+
+// ── SUPABASE DB HELPERS ──────────────────────────────────
+async function dbSave() {
+  try {
+    const res = await fetch('/api/db', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'save',
+        project: {
+          idea:       STATE.idea,
+          characters: STATE.characters,
+          scenes:     STATE.scenes,
+          camera:     STATE.camera,
+          visual:     STATE.visual,
+          dialogue:   STATE.dialogue,
+        },
+      }),
+    });
+    if (!res.ok) return;           // silent fail — DB is optional
+    const data = await res.json();
+    STATE.dbProjectId = data.id;
+  } catch (_) { /* silent */ }
+}
+
+async function dbList() {
+  const res = await fetch('/api/db', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'list' }),
+  });
+  if (!res.ok) throw new Error('Failed to load history from database.');
+  return res.json();
+}
+
+async function dbLoad(projectId) {
+  const res = await fetch('/api/db', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'load', projectId }),
+  });
+  if (!res.ok) throw new Error('Failed to load project from database.');
+  return res.json();
+}
+
+async function dbDelete(projectId) {
+  const res = await fetch('/api/db', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'delete', projectId }),
+  });
+  if (!res.ok) throw new Error('Failed to delete project.');
+  return res.json();
 }
 
 function buildShell() {
@@ -182,11 +239,12 @@ function renderTab(id) {
     case 'visual':     renderVisualPanel(panel);     break;
     case 'dialogue':   renderDialoguePanel(panel);   break;
     case 'plan':       renderFinalPlanPanel(panel);  break;
+    case 'history':    renderHistoryPanel(panel);    break;
   }
 }
 
 function updateTabStates() {
-  const unlocked = ['idea'];
+  const unlocked = ['idea', 'history'];   // history always accessible
   if (STATE.characters) unlocked.push('characters');
   if (STATE.scenes)     unlocked.push('scenes');
   if (STATE.camera)     unlocked.push('camera');
@@ -197,7 +255,8 @@ function updateTabStates() {
   TABS.forEach(t => {
     const tab = document.getElementById(`tab-${t.id}`);
     if (!tab) return;
-    const isDone    = unlocked.includes(t.id) && t.id !== 'idea';
+    const neverLock = ['idea', 'history'];
+    const isDone    = unlocked.includes(t.id) && !neverLock.includes(t.id);
     const isLocked  = !unlocked.includes(t.id);
     tab.classList.toggle('locked', isLocked);
     tab.classList.toggle('done',   isDone);
@@ -296,11 +355,12 @@ async function handleGenerate() {
 
   const steps = [
     { label: 'Connecting to IBM watsonx.ai…',        pct: 8,  fn: null },
-    { label: 'Developing characters…',               pct: 25, fn: () => generateCharacters(idea) },
-    { label: 'Designing cinematic scenes…',          pct: 44, fn: () => generateScenes(idea) },
-    { label: 'Planning camera directions…',          pct: 62, fn: () => generateCamera(idea) },
-    { label: 'Crafting visual style…',               pct: 78, fn: () => generateVisualStyle(idea) },
-    { label: 'Writing dialogue…',                    pct: 92, fn: () => generateDialogue(idea) },
+    { label: 'Developing characters…',               pct: 22, fn: () => generateCharacters(idea) },
+    { label: 'Designing cinematic scenes…',          pct: 38, fn: () => generateScenes(idea) },
+    { label: 'Planning camera directions…',          pct: 54, fn: () => generateCamera(idea) },
+    { label: 'Crafting visual style…',               pct: 70, fn: () => generateVisualStyle(idea) },
+    { label: 'Writing dialogue…',                    pct: 85, fn: () => generateDialogue(idea) },
+    { label: 'Saving to database…',                  pct: 95, fn: () => dbSave() },
     { label: 'Finalising cinematic plan…',           pct: 100, fn: null },
   ];
 
@@ -865,9 +925,110 @@ function renderFinalPlanPanel(panel) {
   document.getElementById('btn-new-idea').addEventListener('click', () => {
     STATE.idea = ''; STATE.characters = null; STATE.scenes = null;
     STATE.camera = null; STATE.visual = null; STATE.dialogue = null;
+    STATE.dbProjectId = null;
     updateTabStates();
     renderTab('idea');
   });
+}
+
+// ── HISTORY PANEL ────────────────────────────────────────
+async function renderHistoryPanel(panel) {
+  panel.innerHTML = `
+    <div class="page-title">🗂 Saved Projects</div>
+    <div class="page-sub">All cinematic plans saved to Supabase — click to reload any project.</div>
+    <div id="history-body">
+      <div class="status-msg"><div class="spinner"></div><span>Loading history…</span></div>
+    </div>
+  `;
+
+  try {
+    const projects = await dbList();
+    const body = document.getElementById('history-body');
+
+    if (!projects || !projects.length) {
+      body.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">🎞</div>
+          <div class="empty-state-title">No saved projects yet</div>
+          <div class="empty-state-sub">Generate a cinematic plan and it will be saved here automatically.</div>
+          <button class="btn btn-primary" style="margin-top:18px;" onclick="renderTab('idea')">Start a New Idea</button>
+        </div>`;
+      return;
+    }
+
+    body.innerHTML = `
+      <div class="history-grid">
+        ${projects.map(p => {
+          const date = new Date(p.created_at).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' });
+          const shortIdea = p.idea.length > 80 ? p.idea.slice(0, 77) + '…' : p.idea;
+          return `
+            <div class="history-card" data-project-id="${esc(p.id)}">
+              <div class="history-card-icon">🎬</div>
+              <div class="history-card-body">
+                <div class="history-card-idea">${esc(shortIdea)}</div>
+                <div class="history-card-date">📅 ${date}</div>
+              </div>
+              <div class="history-card-actions">
+                <button class="btn btn-primary btn-sm history-load-btn" data-id="${esc(p.id)}">Load</button>
+                <button class="btn btn-ghost btn-sm history-delete-btn" data-id="${esc(p.id)}">🗑</button>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+    `;
+
+    // Load
+    body.querySelectorAll('.history-load-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = '…';
+        try {
+          const proj = await dbLoad(btn.dataset.id);
+          STATE.idea        = proj.idea;
+          STATE.characters  = proj.characters;
+          STATE.scenes      = proj.scenes;
+          STATE.camera      = proj.camera;
+          STATE.visual      = proj.visual;
+          STATE.dialogue    = proj.dialogue;
+          STATE.dbProjectId = proj.id;
+          updateTabStates();
+          renderTab('plan');
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = 'Load';
+          alert('Error loading project: ' + err.message);
+        }
+      });
+    });
+
+    // Delete
+    body.querySelectorAll('.history-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this project permanently?')) return;
+        btn.disabled = true;
+        try {
+          await dbDelete(btn.dataset.id);
+          // Remove card from DOM
+          const card = btn.closest('.history-card');
+          if (card) card.remove();
+          // If no cards left show empty state
+          if (!body.querySelectorAll('.history-card').length) {
+            renderHistoryPanel(panel);
+          }
+        } catch (err) {
+          btn.disabled = false;
+          alert('Error deleting project: ' + err.message);
+        }
+      });
+    });
+
+  } catch (err) {
+    document.getElementById('history-body').innerHTML = `
+      <div class="error-box">
+        <span class="error-box-icon">⚠</span>
+        <span>${esc(err.message)} — Make sure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in Vercel env vars.</span>
+      </div>`;
+  }
 }
 
 // ── UTILITIES ────────────────────────────────────────────

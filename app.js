@@ -143,6 +143,9 @@ function buildNav() {
 }
 
 function buildConfigModal() {
+  const keyStatus = CONFIG.apiKey
+    ? `<div style="font-size:12px;color:#2a9d4e;margin-top:4px;">✓ Key saved (${CONFIG.apiKey.slice(0,6)}…${CONFIG.apiKey.slice(-4)})</div>`
+    : `<div style="font-size:12px;color:#e05252;margin-top:4px;">⚠ No key saved yet</div>`;
   return `
     <div id="config-modal" role="dialog" aria-modal="true">
       <div class="modal-box">
@@ -153,8 +156,10 @@ function buildConfigModal() {
         </div>
         <div class="form-group">
           <label class="form-label" for="cfg-apikey">Gemini API Key</label>
-          <input class="form-input" type="password" id="cfg-apikey" placeholder="Enter Gemini API Key" value="${CONFIG.apiKey}" />
+          <input class="form-input" type="password" id="cfg-apikey" placeholder="Paste your API key here" value="${CONFIG.apiKey}" />
+          ${keyStatus}
         </div>
+        <div id="cfg-save-msg" style="font-size:12px;min-height:18px;"></div>
         <div class="modal-actions">
           <button class="btn btn-ghost btn-sm" id="btn-modal-cancel">Cancel</button>
           <button class="btn btn-primary btn-sm" id="btn-modal-save">Save & Close</button>
@@ -165,15 +170,10 @@ function buildConfigModal() {
 
 // ── EVENTS ───────────────────────────────────────────────
 function attachEvents() {
-  // Config modal
+  // Config modal open button
   document.getElementById('btn-config').addEventListener('click', () =>
     document.getElementById('config-modal').classList.add('open'));
-  document.getElementById('btn-modal-cancel').addEventListener('click', () =>
-    document.getElementById('config-modal').classList.remove('open'));
-  document.getElementById('btn-modal-save').addEventListener('click', saveConfig);
-  document.getElementById('config-modal').addEventListener('click', e => {
-    if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
-  });
+  attachConfigModalEvents();
 
   // Nav tabs
   document.getElementById('nav').addEventListener('click', e => {
@@ -186,9 +186,28 @@ function attachEvents() {
 }
 
 function saveConfig() {
-  CONFIG.apiKey = document.getElementById('cfg-apikey').value.trim();
-  localStorage.setItem('gemini_api_key', CONFIG.apiKey);
+  const key = document.getElementById('cfg-apikey').value.trim();
+  if (!key) {
+    document.getElementById('cfg-save-msg').innerHTML =
+      '<span style="color:#e05252">⚠ Please paste a valid API key first.</span>';
+    return;
+  }
+  CONFIG.apiKey = key;
+  localStorage.setItem('gemini_api_key', key);
   document.getElementById('config-modal').classList.remove('open');
+  // Rebuild modal so key-status refreshes next time it opens
+  const existing = document.getElementById('config-modal');
+  existing.outerHTML = buildConfigModal();
+  attachConfigModalEvents();
+}
+
+function attachConfigModalEvents() {
+  document.getElementById('btn-modal-cancel').addEventListener('click', () =>
+    document.getElementById('config-modal').classList.remove('open'));
+  document.getElementById('btn-modal-save').addEventListener('click', saveConfig);
+  document.getElementById('config-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
+  });
 }
 
 // ── TAB RENDERER ─────────────────────────────────────────

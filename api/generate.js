@@ -47,12 +47,15 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Gemini API key not configured.' });
   }
 
-  const endpoint = `${GEMINI_BASE}/${modelId}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const endpoint = `${GEMINI_BASE}/${modelId}:generateContent?key=${apiKey.trim()}`;
 
   try {
     const geminiRes = await fetch(endpoint, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey.trim(),
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {

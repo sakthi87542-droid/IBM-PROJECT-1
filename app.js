@@ -1,30 +1,18 @@
 /* ========================================================
    AI Cinematic Story & Visual Director
-   IBM watsonx.ai — Granite Model Integration
+   Google Gemini — Free AI Integration
    Supabase — Project Persistence
    ======================================================== */
 
 // ── CONFIG ──────────────────────────────────────────────
 const CONFIG = {
-  apiKey:    localStorage.getItem('ibm_api_key')    || '',
-  projectId: localStorage.getItem('ibm_project_id') || '',
-  region:    localStorage.getItem('ibm_region')     || 'us-south',
-  modelId:   'ibm/granite-3-3-8b-instruct',
-};
-
-const REGIONS = {
-  'us-south': 'https://us-south.ml.cloud.ibm.com',
-  'eu-gb':    'https://eu-gb.ml.cloud.ibm.com',
-  'eu-de':    'https://eu-de.ml.cloud.ibm.com',
-  'jp-tok':   'https://jp-tok.ml.cloud.ibm.com',
-  'au-syd':   'https://au-syd.ml.cloud.ibm.com',
+  apiKey:  localStorage.getItem('gemini_api_key') || '',
+  modelId: 'gemini-1.5-flash',
 };
 
 // ── STATE ────────────────────────────────────────────────
 const STATE = {
   idea:        '',
-  iamToken:    '',
-  tokenExpiry: 0,
   characters:  null,
   scenes:      null,
   camera:      null,
@@ -126,7 +114,7 @@ function buildShell() {
       ${TABS.map(t => `<div class="panel" id="panel-${t.id}" role="tabpanel"></div>`).join('')}
     </main>
     ${buildConfigModal()}
-    <footer id="footer">Made with IBM Bob &nbsp;·&nbsp; Powered by IBM watsonx.ai Granite</footer>
+    <footer id="footer">Made with IBM Bob &nbsp;·&nbsp; Powered by Google Gemini</footer>
   `;
 }
 
@@ -140,7 +128,7 @@ function buildHeader() {
           <div class="brand-sub">AI Story & Visual Planner</div>
         </div>
       </div>
-      <button class="header-config-btn" id="btn-config">⚙ IBM AI Config</button>
+      <button class="header-config-btn" id="btn-config">⚙ AI Config</button>
     </header>`;
 }
 
@@ -155,28 +143,17 @@ function buildNav() {
 }
 
 function buildConfigModal() {
-  const regionOptions = Object.keys(REGIONS).map(r =>
-    `<option value="${r}" ${r === CONFIG.region ? 'selected' : ''}>${r}</option>`
-  ).join('');
   return `
     <div id="config-modal" role="dialog" aria-modal="true">
       <div class="modal-box">
-        <div class="modal-title">🔧 IBM watsonx.ai Configuration</div>
+        <div class="modal-title">🔧 Google Gemini Configuration</div>
         <div class="modal-sub">
-          Enter your IBM Cloud credentials. Your API key is stored locally in your browser only.
-          Get credentials at <a href="https://cloud.ibm.com" target="_blank" style="color:var(--accent)">cloud.ibm.com</a>.
+          Enter your free Google Gemini API key. It is stored locally in your browser only.
+          Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com</a>.
         </div>
         <div class="form-group">
-          <label class="form-label" for="cfg-apikey">IBM Cloud API Key</label>
-          <input class="form-input" type="password" id="cfg-apikey" placeholder="Enter IBM Cloud API Key" value="${CONFIG.apiKey}" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="cfg-project">watsonx.ai Project ID</label>
-          <input class="form-input" type="text" id="cfg-project" placeholder="Enter Project ID (GUID)" value="${CONFIG.projectId}" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="cfg-region">Region</label>
-          <select class="form-input" id="cfg-region">${regionOptions}</select>
+          <label class="form-label" for="cfg-apikey">Gemini API Key</label>
+          <input class="form-input" type="password" id="cfg-apikey" placeholder="Enter Gemini API Key" value="${CONFIG.apiKey}" />
         </div>
         <div class="modal-actions">
           <button class="btn btn-ghost btn-sm" id="btn-modal-cancel">Cancel</button>
@@ -209,13 +186,8 @@ function attachEvents() {
 }
 
 function saveConfig() {
-  CONFIG.apiKey    = document.getElementById('cfg-apikey').value.trim();
-  CONFIG.projectId = document.getElementById('cfg-project').value.trim();
-  CONFIG.region    = document.getElementById('cfg-region').value;
-  localStorage.setItem('ibm_api_key',    CONFIG.apiKey);
-  localStorage.setItem('ibm_project_id', CONFIG.projectId);
-  localStorage.setItem('ibm_region',     CONFIG.region);
-  STATE.iamToken = '';   // force re-auth on next call
+  CONFIG.apiKey = document.getElementById('cfg-apikey').value.trim();
+  localStorage.setItem('gemini_api_key', CONFIG.apiKey);
   document.getElementById('config-modal').classList.remove('open');
 }
 
@@ -271,7 +243,7 @@ function renderIdeaPanel(panel) {
       <div class="clap-title">AI Cinematic Story &amp; Visual Director</div>
       <div class="clap-sub">
         Transform your story idea into a professional cinematic production plan —
-        with character development, scene design, camera direction, visual style, and dialogue — powered by IBM watsonx.ai.
+        with character development, scene design, camera direction, visual style, and dialogue — powered by Google Gemini.
       </div>
       <div class="step-pills">
         ${TABS.map(t => `<div class="step-pill ${t.id === 'idea' ? 'active' : ''}">${t.icon} ${t.label}</div>`).join('')}
@@ -336,11 +308,10 @@ function renderIdeaPanel(panel) {
 async function handleGenerate() {
   const idea = document.getElementById('idea-input').value.trim();
   if (!idea) { showError('generate-error', 'Please enter a story idea first.'); return; }
-  if (!CONFIG.apiKey || !CONFIG.projectId) {
-    showError('generate-error', 'IBM API Key and Project ID are required. Click ⚙ IBM AI Config to add them.');
+  if (!CONFIG.apiKey) {
+    showError('generate-error', 'Gemini API Key is required. Click ⚙ AI Config to add it.');
     return;
   }
-  // Preflight check: verify the /api/generate endpoint is reachable
   STATE.idea = idea;
   STATE.generating = true;
   clearError('generate-error');
@@ -354,7 +325,7 @@ async function handleGenerate() {
   wrapEl.style.display = 'block';
 
   const steps = [
-    { label: 'Connecting to IBM watsonx.ai…',        pct: 8,  fn: null },
+    { label: 'Connecting to Google Gemini…',         pct: 8,  fn: null },
     { label: 'Developing characters…',               pct: 22, fn: () => generateCharacters(idea) },
     { label: 'Designing cinematic scenes…',          pct: 38, fn: () => generateScenes(idea) },
     { label: 'Planning camera directions…',          pct: 54, fn: () => generateCamera(idea) },
@@ -391,18 +362,16 @@ function setStatus(statusEl, progressEl, msg, pct) {
   progressEl.style.width = pct + '%';
 }
 
-// ── WATSONX INFERENCE — via /api/generate serverless proxy ──
-async function callWatsonx(prompt, maxTokens = 1800) {
+// ── GEMINI INFERENCE — via /api/generate serverless proxy ──
+async function callGemini(prompt, maxTokens = 1800) {
   const res = await fetch('/api/generate', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       prompt,
       maxTokens,
-      apiKey:    CONFIG.apiKey,
-      projectId: CONFIG.projectId,
-      region:    CONFIG.region,
-      modelId:   CONFIG.modelId,
+      apiKey:  CONFIG.apiKey,
+      modelId: CONFIG.modelId,
     }),
   });
   if (!res.ok) {
@@ -439,7 +408,7 @@ END_CHARACTER
 
 Generate all 3 characters now:`;
 
-  const raw = await callWatsonx(prompt, 1600);
+  const raw = await callGemini(prompt, 1600);
   STATE.characters = parseCharacters(raw);
 }
 
@@ -472,7 +441,7 @@ END_SCENE
 
 Generate all 5 scenes now:`;
 
-  const raw = await callWatsonx(prompt, 1800);
+  const raw = await callGemini(prompt, 1800);
   STATE.scenes = parseScenes(raw);
 }
 
@@ -500,7 +469,7 @@ END_SHOT
 
 Generate camera shots for all 5 scenes now:`;
 
-  const raw = await callWatsonx(prompt, 2000);
+  const raw = await callGemini(prompt, 2000);
   STATE.camera = parseShots(raw);
 }
 
@@ -531,7 +500,7 @@ END_VISUAL
 
 Generate visual styles for all 5 scenes now:`;
 
-  const raw = await callWatsonx(prompt, 1800);
+  const raw = await callGemini(prompt, 1800);
   STATE.visual = parseVisual(raw);
 }
 
@@ -573,7 +542,7 @@ END_DIALOGUE
 
 Write dialogue for scenes 1, 3, and 5 now:`;
 
-  const raw = await callWatsonx(prompt, 1600);
+  const raw = await callGemini(prompt, 1600);
   STATE.dialogue = parseDialogue(raw);
 }
 
@@ -848,7 +817,7 @@ function renderFinalPlanPanel(panel) {
 
     <div class="plan-hero" id="plan-export-target">
       <div class="plan-hero-title">🎬 ${esc(title)}</div>
-      <div class="plan-hero-sub">Cinematic Production Plan · Generated ${genDate} · IBM watsonx.ai Granite</div>
+      <div class="plan-hero-sub">Cinematic Production Plan · Generated ${genDate} · Google Gemini</div>
     </div>
 
     <div class="plan-section">

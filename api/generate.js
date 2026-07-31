@@ -1,49 +1,18 @@
 /**
  * /api/generate
- * Serverless proxy — forwards generation requests to IBM watsonx.ai.
- * Keeps the IAM Bearer token server-side; only the generated text is returned.
+ * Serverless proxy — forwards generation requests to Google Gemini (free tier).
+ * The API key is kept server-side via env var; only the generated text is returned.
  *
  * POST body (JSON):
  * {
  *   prompt:    string,
  *   maxTokens: number,       // optional, default 1800
- *   projectId: string,       // can be overridden by env var IBM_PROJECT_ID
- *   region:    string,       // e.g. "us-south"
- *   modelId:   string        // e.g. "ibm/granite-3-3-8b-instruct"
+ *   apiKey:    string,       // browser fallback if GEMINI_API_KEY env var not set
+ *   modelId:   string        // optional, e.g. "gemini-1.5-flash"
  * }
  */
 
-const REGIONS = {
-  'us-south': 'https://us-south.ml.cloud.ibm.com',
-  'eu-gb':    'https://eu-gb.ml.cloud.ibm.com',
-  'eu-de':    'https://eu-de.ml.cloud.ibm.com',
-  'jp-tok':   'https://jp-tok.ml.cloud.ibm.com',
-  'au-syd':   'https://au-syd.ml.cloud.ibm.com',
-};
-
-// Simple in-memory token cache (lives for the duration of the serverless instance)
-let cachedToken   = '';
-let tokenExpiry   = 0;
-
-async function getToken(apiKey) {
-  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
-
-  const res = await fetch('https://iam.cloud.ibm.com/identity/token', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    `grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${encodeURIComponent(apiKey)}`,
-  });
-
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`IAM auth failed (${res.status}): ${t.slice(0, 200)}`);
-  }
-
-  const data    = await res.json();
-  cachedToken   = data.access_token;
-  tokenExpiry   = Date.now() + (data.expires_in - 120) * 1000;
-  return cachedToken;
-}
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 export default async function handler(req, res) {
   // CORS preflight
@@ -63,9 +32,7 @@ export default async function handler(req, res) {
   const {
     prompt,
     maxTokens = 1800,
-    projectId: clientProjectId,
-    region    = 'us-south',
-    modelId   = 'ibm/granite-3-3-8b-instruct',
+    modelId   = 'gemini-1.5-flash',
     apiKey:   clientApiKey,
   } = req.body || {};
 
@@ -73,44 +40,39 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'prompt is required' });
   }
 
-  // Prefer server-side env vars; fall back to values sent from the browser
-  const apiKey    = process.env.IBM_API_KEY    || clientApiKey;
-  const projectId = process.env.IBM_PROJECT_ID || clientProjectId;
+  // Prefer server-side env var; fall back to value sent from the browser
+  const apiKey = process.env.GEMINI_API_KEY || clientApiKey;
 
-  if (!apiKey)    return res.status(400).json({ error: 'IBM_API_KEY not configured.' });
-  if (!projectId) return res.status(400).json({ error: 'IBM_PROJECT_ID not configured.' });
+  if (!apiKey) {
+    return res.status(400).json({ error: 'Gemini API key not configured.' });
+  }
+
+  const endpoint = `${GEMINI_BASE}/${modelId}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
   try {
-    const token    = await getToken(apiKey);
-    const baseUrl  = REGIONS[region] || REGIONS['us-south'];
-    const endpoint = `${baseUrl}/ml/v1/text/generation?version=2023-05-29`;
-
-    const wxRes = await fetch(endpoint, {
+    const geminiRes = await fetch(endpoint, {
       method:  'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model_id:   modelId,
-        project_id: projectId,
-        input:      prompt,
-        parameters: {
-          decoding_method:    'greedy',
-          max_new_tokens:     maxTokens,
-          stop_sequences:     ['---END---'],
-          repetition_penalty: 1.1,
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          temperature:     0.7,
         },
       }),
     });
 
-    if (!wxRes.ok) {
-      const errText = await wxRes.text();
-      return res.status(wxRes.status).json({ error: `watsonx.ai error (${wxRes.status})`, details: errText.slice(0, 400) });
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text();
+      return res.status(geminiRes.status).json({
+        error:   `Gemini error (${geminiRes.status})`,
+        details: errText.slice(0, 400),
+      });
     }
 
-    const wxData      = await wxRes.json();
-    const generatedText = wxData.results?.[0]?.generated_text || '';
+    const geminiData   = await geminiRes.json();
+    const generatedText =
+      geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     return res.status(200).json({ generated_text: generatedText });
   } catch (err) {

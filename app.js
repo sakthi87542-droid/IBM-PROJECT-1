@@ -7,7 +7,7 @@
 // ── CONFIG ──────────────────────────────────────────────
 const CONFIG = {
   apiKey:  localStorage.getItem('gemini_api_key') || '',
-  modelId: 'gemini-1.5-flash',
+  modelId: 'gemini-2.0-flash',
 };
 
 // ── STATE ────────────────────────────────────────────────

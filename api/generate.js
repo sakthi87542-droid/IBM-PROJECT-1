@@ -8,7 +8,7 @@
  *   prompt:    string,
  *   maxTokens: number,       // optional, default 1800
  *   apiKey:    string,       // browser fallback if GEMINI_API_KEY env var not set
- *   modelId:   string        // optional, e.g. "gemini-1.5-flash"
+ *   modelId:   string        // optional, e.g. "gemini-2.0-flash"
  * }
  */
 
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
   const {
     prompt,
     maxTokens = 1800,
-    modelId   = 'gemini-1.5-flash',
+    modelId   = 'gemini-2.0-flash',
     apiKey:   clientApiKey,
   } = req.body || {};
 
@@ -64,9 +64,10 @@ export default async function handler(req, res) {
 
     if (!geminiRes.ok) {
       const errText = await geminiRes.text();
+      let errDetail = errText.slice(0, 400);
+      try { errDetail = JSON.parse(errText)?.error?.message || errDetail; } catch (_) {}
       return res.status(geminiRes.status).json({
-        error:   `Gemini error (${geminiRes.status})`,
-        details: errText.slice(0, 400),
+        error: `Gemini error (${geminiRes.status}): ${errDetail}`,
       });
     }
 

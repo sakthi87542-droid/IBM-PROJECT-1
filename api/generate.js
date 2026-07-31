@@ -1,18 +1,18 @@
 /**
  * /api/generate
- * Serverless proxy — forwards generation requests to Google Gemini (free tier).
+ * Serverless proxy — forwards generation requests to OpenAI ChatGPT.
  * The API key is kept server-side via env var; only the generated text is returned.
  *
  * POST body (JSON):
  * {
  *   prompt:    string,
- *   maxTokens: number,       // optional, default 1800
- *   apiKey:    string,       // browser fallback if GEMINI_API_KEY env var not set
- *   modelId:   string        // optional, e.g. "gemini-2.0-flash"
+ *   maxTokens: number,    // optional, default 1800
+ *   apiKey:    string,    // browser fallback if OPENAI_API_KEY env var not set
+ *   modelId:   string     // optional, default "gpt-4o-mini"
  * }
  */
 
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+const OPENAI_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 
 export default async function handler(req, res) {
   // CORS preflight
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
   const {
     prompt,
     maxTokens = 1800,
-    modelId   = 'gemini-2.0-flash',
+    modelId   = 'gpt-4o-mini',
     apiKey:   clientApiKey,
   } = req.body || {};
 
@@ -41,42 +41,40 @@ export default async function handler(req, res) {
   }
 
   // Prefer server-side env var; fall back to value sent from the browser
-  const apiKey = process.env.GEMINI_API_KEY || clientApiKey;
+  const apiKey = (process.env.OPENAI_API_KEY || clientApiKey || '').trim();
 
   if (!apiKey) {
-    return res.status(400).json({ error: 'Gemini API key not configured.' });
+    return res.status(400).json({ error: 'OpenAI API key not configured.' });
   }
 
-  const endpoint = `${GEMINI_BASE}/${modelId}:generateContent?key=${apiKey.trim()}`;
-
   try {
-    const geminiRes = await fetch(endpoint, {
+    const openaiRes = await fetch(OPENAI_ENDPOINT, {
       method:  'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey.trim(),
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          maxOutputTokens: maxTokens,
-          temperature:     0.7,
-        },
+        model:      modelId,
+        max_tokens: maxTokens,
+        temperature: 0.7,
+        messages: [
+          { role: 'user', content: prompt },
+        ],
       }),
     });
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
+    if (!openaiRes.ok) {
+      const errText = await openaiRes.text();
       let errDetail = errText.slice(0, 400);
       try { errDetail = JSON.parse(errText)?.error?.message || errDetail; } catch (_) {}
-      return res.status(geminiRes.status).json({
-        error: `Gemini error (${geminiRes.status}): ${errDetail}`,
+      return res.status(openaiRes.status).json({
+        error: `ChatGPT error (${openaiRes.status}): ${errDetail}`,
       });
     }
 
-    const geminiData   = await geminiRes.json();
-    const generatedText =
-      geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const openaiData    = await openaiRes.json();
+    const generatedText = openaiData.choices?.[0]?.message?.content || '';
 
     return res.status(200).json({ generated_text: generatedText });
   } catch (err) {

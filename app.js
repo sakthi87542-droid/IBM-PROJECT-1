@@ -1,13 +1,13 @@
 /* ========================================================
    AI Cinematic Story & Visual Director
-   Google Gemini — Free AI Integration
+   OpenAI ChatGPT Integration
    Supabase — Project Persistence
    ======================================================== */
 
 // ── CONFIG ──────────────────────────────────────────────
 const CONFIG = {
-  apiKey:  localStorage.getItem('gemini_api_key') || '',
-  modelId: 'gemini-2.0-flash',
+  apiKey:  localStorage.getItem('openai_api_key') || '',
+  modelId: 'gpt-4o-mini',
 };
 
 // ── STATE ────────────────────────────────────────────────
@@ -114,7 +114,7 @@ function buildShell() {
       ${TABS.map(t => `<div class="panel" id="panel-${t.id}" role="tabpanel"></div>`).join('')}
     </main>
     ${buildConfigModal()}
-    <footer id="footer">Made with IBM Bob &nbsp;·&nbsp; Powered by Google Gemini</footer>
+    <footer id="footer">Made with IBM Bob &nbsp;·&nbsp; Powered by ChatGPT (gpt-4o-mini)</footer>
   `;
 }
 
@@ -149,14 +149,14 @@ function buildConfigModal() {
   return `
     <div id="config-modal" role="dialog" aria-modal="true">
       <div class="modal-box">
-        <div class="modal-title">🔧 Google Gemini Configuration</div>
+        <div class="modal-title">🔧 ChatGPT Configuration</div>
         <div class="modal-sub">
-          Enter your free Google Gemini API key. It is stored locally in your browser only.
-          Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com</a>.
+          Enter your OpenAI API key. It is stored locally in your browser only.
+          Get a key at <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--accent)">platform.openai.com/api-keys</a>.
         </div>
         <div class="form-group">
-          <label class="form-label" for="cfg-apikey">Gemini API Key</label>
-          <input class="form-input" type="password" id="cfg-apikey" placeholder="Paste your API key here" value="${CONFIG.apiKey}" />
+          <label class="form-label" for="cfg-apikey">OpenAI API Key</label>
+          <input class="form-input" type="password" id="cfg-apikey" placeholder="sk-..." value="${CONFIG.apiKey}" />
           ${keyStatus}
         </div>
         <div id="cfg-save-msg" style="font-size:12px;min-height:18px;"></div>
@@ -193,7 +193,7 @@ function saveConfig() {
     return;
   }
   CONFIG.apiKey = key;
-  localStorage.setItem('gemini_api_key', key);
+  localStorage.setItem('openai_api_key', key);
   document.getElementById('config-modal').classList.remove('open');
   // Rebuild modal so key-status refreshes next time it opens
   const existing = document.getElementById('config-modal');
@@ -262,7 +262,7 @@ function renderIdeaPanel(panel) {
       <div class="clap-title">AI Cinematic Story &amp; Visual Director</div>
       <div class="clap-sub">
         Transform your story idea into a professional cinematic production plan —
-        with character development, scene design, camera direction, visual style, and dialogue — powered by Google Gemini.
+        with character development, scene design, camera direction, visual style, and dialogue — powered by ChatGPT.
       </div>
       <div class="step-pills">
         ${TABS.map(t => `<div class="step-pill ${t.id === 'idea' ? 'active' : ''}">${t.icon} ${t.label}</div>`).join('')}
@@ -328,7 +328,7 @@ async function handleGenerate() {
   const idea = document.getElementById('idea-input').value.trim();
   if (!idea) { showError('generate-error', 'Please enter a story idea first.'); return; }
   if (!CONFIG.apiKey) {
-    showError('generate-error', 'Gemini API Key is required. Click ⚙ AI Config to add it.');
+    showError('generate-error', 'OpenAI API Key is required. Click ⚙ AI Config to add it.');
     return;
   }
   STATE.idea = idea;
@@ -344,7 +344,7 @@ async function handleGenerate() {
   wrapEl.style.display = 'block';
 
   const steps = [
-    { label: 'Connecting to Google Gemini…',         pct: 8,  fn: null },
+    { label: 'Connecting to ChatGPT…',               pct: 8,  fn: null },
     { label: 'Developing characters…',               pct: 22, fn: () => generateCharacters(idea) },
     { label: 'Designing cinematic scenes…',          pct: 38, fn: () => generateScenes(idea) },
     { label: 'Planning camera directions…',          pct: 54, fn: () => generateCamera(idea) },
@@ -381,8 +381,8 @@ function setStatus(statusEl, progressEl, msg, pct) {
   progressEl.style.width = pct + '%';
 }
 
-// ── GEMINI INFERENCE — via /api/generate serverless proxy ──
-async function callGemini(prompt, maxTokens = 1800) {
+// ── CHATGPT INFERENCE — via /api/generate serverless proxy ──
+async function callAI(prompt, maxTokens = 1800) {
   const res = await fetch('/api/generate', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -427,7 +427,7 @@ END_CHARACTER
 
 Generate all 3 characters now:`;
 
-  const raw = await callGemini(prompt, 1600);
+  const raw = await callAI(prompt, 1600);
   STATE.characters = parseCharacters(raw);
 }
 
@@ -460,7 +460,7 @@ END_SCENE
 
 Generate all 5 scenes now:`;
 
-  const raw = await callGemini(prompt, 1800);
+  const raw = await callAI(prompt, 1800);
   STATE.scenes = parseScenes(raw);
 }
 
@@ -488,7 +488,7 @@ END_SHOT
 
 Generate camera shots for all 5 scenes now:`;
 
-  const raw = await callGemini(prompt, 2000);
+  const raw = await callAI(prompt, 2000);
   STATE.camera = parseShots(raw);
 }
 
@@ -519,7 +519,7 @@ END_VISUAL
 
 Generate visual styles for all 5 scenes now:`;
 
-  const raw = await callGemini(prompt, 1800);
+  const raw = await callAI(prompt, 1800);
   STATE.visual = parseVisual(raw);
 }
 
@@ -561,7 +561,7 @@ END_DIALOGUE
 
 Write dialogue for scenes 1, 3, and 5 now:`;
 
-  const raw = await callGemini(prompt, 1600);
+  const raw = await callAI(prompt, 1600);
   STATE.dialogue = parseDialogue(raw);
 }
 
@@ -836,7 +836,7 @@ function renderFinalPlanPanel(panel) {
 
     <div class="plan-hero" id="plan-export-target">
       <div class="plan-hero-title">🎬 ${esc(title)}</div>
-      <div class="plan-hero-sub">Cinematic Production Plan · Generated ${genDate} · Google Gemini</div>
+      <div class="plan-hero-sub">Cinematic Production Plan · Generated ${genDate} · ChatGPT (gpt-4o-mini)</div>
     </div>
 
     <div class="plan-section">

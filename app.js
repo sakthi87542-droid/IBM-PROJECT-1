@@ -1,13 +1,13 @@
 /* ========================================================
    AI Cinematic Story & Visual Director
-   OpenAI ChatGPT Integration
+   Groq (Llama 3.3) — Free AI Integration
    Supabase — Project Persistence
    ======================================================== */
 
 // ── CONFIG ──────────────────────────────────────────────
 const CONFIG = {
-  apiKey:  localStorage.getItem('openai_api_key') || '',
-  modelId: 'gpt-4o-mini',
+  apiKey:  localStorage.getItem('groq_api_key') || '',
+  modelId: 'llama-3.3-70b-versatile',
 };
 
 // ── STATE ────────────────────────────────────────────────
@@ -114,7 +114,7 @@ function buildShell() {
       ${TABS.map(t => `<div class="panel" id="panel-${t.id}" role="tabpanel"></div>`).join('')}
     </main>
     ${buildConfigModal()}
-    <footer id="footer">Made with IBM Bob &nbsp;·&nbsp; Powered by ChatGPT (gpt-4o-mini)</footer>
+    <footer id="footer">Made with IBM Bob &nbsp;·&nbsp; Powered by Groq (Llama 3.3 70B)</footer>
   `;
 }
 
@@ -149,14 +149,14 @@ function buildConfigModal() {
   return `
     <div id="config-modal" role="dialog" aria-modal="true">
       <div class="modal-box">
-        <div class="modal-title">🔧 ChatGPT Configuration</div>
+        <div class="modal-title">🔧 Groq Configuration</div>
         <div class="modal-sub">
-          Enter your OpenAI API key. It is stored locally in your browser only.
-          Get a key at <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--accent)">platform.openai.com/api-keys</a>.
+          Enter your free Groq API key. It is stored locally in your browser only.
+          Get a free key at <a href="https://console.groq.com/keys" target="_blank" style="color:var(--accent)">console.groq.com/keys</a>.
         </div>
         <div class="form-group">
-          <label class="form-label" for="cfg-apikey">OpenAI API Key</label>
-          <input class="form-input" type="password" id="cfg-apikey" placeholder="sk-..." value="${CONFIG.apiKey}" />
+          <label class="form-label" for="cfg-apikey">Groq API Key</label>
+          <input class="form-input" type="password" id="cfg-apikey" placeholder="gsk_..." value="${CONFIG.apiKey}" />
           ${keyStatus}
         </div>
         <div id="cfg-save-msg" style="font-size:12px;min-height:18px;"></div>
@@ -193,7 +193,7 @@ function saveConfig() {
     return;
   }
   CONFIG.apiKey = key;
-  localStorage.setItem('openai_api_key', key);
+  localStorage.setItem('groq_api_key', key);
   document.getElementById('config-modal').classList.remove('open');
   // Rebuild modal so key-status refreshes next time it opens
   const existing = document.getElementById('config-modal');
@@ -262,7 +262,7 @@ function renderIdeaPanel(panel) {
       <div class="clap-title">AI Cinematic Story &amp; Visual Director</div>
       <div class="clap-sub">
         Transform your story idea into a professional cinematic production plan —
-        with character development, scene design, camera direction, visual style, and dialogue — powered by ChatGPT.
+        with character development, scene design, camera direction, visual style, and dialogue — powered by Groq AI.
       </div>
       <div class="step-pills">
         ${TABS.map(t => `<div class="step-pill ${t.id === 'idea' ? 'active' : ''}">${t.icon} ${t.label}</div>`).join('')}
@@ -328,7 +328,7 @@ async function handleGenerate() {
   const idea = document.getElementById('idea-input').value.trim();
   if (!idea) { showError('generate-error', 'Please enter a story idea first.'); return; }
   if (!CONFIG.apiKey) {
-    showError('generate-error', 'OpenAI API Key is required. Click ⚙ AI Config to add it.');
+    showError('generate-error', 'Groq API Key is required. Click ⚙ AI Config to add it.');
     return;
   }
   STATE.idea = idea;
@@ -344,7 +344,7 @@ async function handleGenerate() {
   wrapEl.style.display = 'block';
 
   const steps = [
-    { label: 'Connecting to ChatGPT…',               pct: 8,  fn: null },
+    { label: 'Connecting to Groq AI…',               pct: 8,  fn: null },
     { label: 'Developing characters…',               pct: 22, fn: () => generateCharacters(idea) },
     { label: 'Designing cinematic scenes…',          pct: 38, fn: () => generateScenes(idea) },
     { label: 'Planning camera directions…',          pct: 54, fn: () => generateCamera(idea) },
@@ -381,7 +381,7 @@ function setStatus(statusEl, progressEl, msg, pct) {
   progressEl.style.width = pct + '%';
 }
 
-// ── CHATGPT INFERENCE — via /api/generate serverless proxy ──
+// ── GROQ INFERENCE — via /api/generate serverless proxy ──
 async function callAI(prompt, maxTokens = 1800) {
   const res = await fetch('/api/generate', {
     method:  'POST',
@@ -836,7 +836,7 @@ function renderFinalPlanPanel(panel) {
 
     <div class="plan-hero" id="plan-export-target">
       <div class="plan-hero-title">🎬 ${esc(title)}</div>
-      <div class="plan-hero-sub">Cinematic Production Plan · Generated ${genDate} · ChatGPT (gpt-4o-mini)</div>
+      <div class="plan-hero-sub">Cinematic Production Plan · Generated ${genDate} · Groq (Llama 3.3 70B)</div>
     </div>
 
     <div class="plan-section">

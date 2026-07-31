@@ -1,18 +1,18 @@
 /**
  * /api/generate
- * Serverless proxy — forwards generation requests to OpenAI ChatGPT.
+ * Serverless proxy — forwards generation requests to Groq (free tier).
  * The API key is kept server-side via env var; only the generated text is returned.
  *
  * POST body (JSON):
  * {
  *   prompt:    string,
  *   maxTokens: number,    // optional, default 1800
- *   apiKey:    string,    // browser fallback if OPENAI_API_KEY env var not set
- *   modelId:   string     // optional, default "gpt-4o-mini"
+ *   apiKey:    string,    // browser fallback if GROQ_API_KEY env var not set
+ *   modelId:   string     // optional, default "llama-3.3-70b-versatile"
  * }
  */
 
-const OPENAI_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
+const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 
 export default async function handler(req, res) {
   // CORS preflight
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
   const {
     prompt,
     maxTokens = 1800,
-    modelId   = 'gpt-4o-mini',
+    modelId   = 'llama-3.3-70b-versatile',
     apiKey:   clientApiKey,
   } = req.body || {};
 
@@ -41,22 +41,22 @@ export default async function handler(req, res) {
   }
 
   // Prefer server-side env var; fall back to value sent from the browser
-  const apiKey = (process.env.OPENAI_API_KEY || clientApiKey || '').trim();
+  const apiKey = (process.env.GROQ_API_KEY || clientApiKey || '').trim();
 
   if (!apiKey) {
-    return res.status(400).json({ error: 'OpenAI API key not configured.' });
+    return res.status(400).json({ error: 'Groq API key not configured.' });
   }
 
   try {
-    const openaiRes = await fetch(OPENAI_ENDPOINT, {
+    const groqRes = await fetch(GROQ_ENDPOINT, {
       method:  'POST',
       headers: {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model:      modelId,
-        max_tokens: maxTokens,
+        model:       modelId,
+        max_tokens:  maxTokens,
         temperature: 0.7,
         messages: [
           { role: 'user', content: prompt },
@@ -64,17 +64,17 @@ export default async function handler(req, res) {
       }),
     });
 
-    if (!openaiRes.ok) {
-      const errText = await openaiRes.text();
+    if (!groqRes.ok) {
+      const errText = await groqRes.text();
       let errDetail = errText.slice(0, 400);
       try { errDetail = JSON.parse(errText)?.error?.message || errDetail; } catch (_) {}
-      return res.status(openaiRes.status).json({
-        error: `ChatGPT error (${openaiRes.status}): ${errDetail}`,
+      return res.status(groqRes.status).json({
+        error: `Groq error (${groqRes.status}): ${errDetail}`,
       });
     }
 
-    const openaiData    = await openaiRes.json();
-    const generatedText = openaiData.choices?.[0]?.message?.content || '';
+    const groqData      = await groqRes.json();
+    const generatedText = groqData.choices?.[0]?.message?.content || '';
 
     return res.status(200).json({ generated_text: generatedText });
   } catch (err) {

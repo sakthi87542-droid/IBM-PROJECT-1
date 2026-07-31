@@ -6,6 +6,7 @@
 
 // ── CONFIG ──────────────────────────────────────────────
 const CONFIG = {
+  apiKey:  localStorage.getItem('groq_api_key') || '',
   modelId: 'llama-3.3-70b-versatile',
 };
 
@@ -112,6 +113,7 @@ function buildShell() {
     <main id="main">
       ${TABS.map(t => `<div class="panel" id="panel-${t.id}" role="tabpanel"></div>`).join('')}
     </main>
+    ${buildConfigModal()}
     <footer id="footer">Made with IBM Bob &nbsp;·&nbsp; Powered by Groq (Llama 3.3 70B)</footer>
   `;
 }
@@ -126,6 +128,7 @@ function buildHeader() {
           <div class="brand-sub">AI Story & Visual Planner</div>
         </div>
       </div>
+      <button class="header-config-btn" id="btn-config">⚙ API Key</button>
     </header>`;
 }
 
@@ -139,8 +142,38 @@ function buildNav() {
     </nav>`;
 }
 
+function buildConfigModal() {
+  const keyStatus = CONFIG.apiKey
+    ? `<span style="color:#2a9d4e">✓ Key saved (${CONFIG.apiKey.slice(0,6)}…${CONFIG.apiKey.slice(-4)})</span>`
+    : `<span style="color:#e05252">⚠ No key saved yet</span>`;
+  return `
+    <div id="config-modal" role="dialog" aria-modal="true">
+      <div class="modal-box">
+        <div class="modal-title">🔧 Groq API Key</div>
+        <div class="modal-sub">
+          Get a free key at <a href="https://console.groq.com/keys" target="_blank" style="color:var(--accent)">console.groq.com/keys</a>
+          — sign in with Google, no credit card needed.
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="cfg-apikey">Groq API Key</label>
+          <input class="form-input" type="password" id="cfg-apikey" placeholder="gsk_..." value="${CONFIG.apiKey}" />
+          <div style="font-size:12px;margin-top:4px;">${keyStatus}</div>
+        </div>
+        <div id="cfg-save-msg" style="font-size:12px;min-height:18px;"></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost btn-sm" id="btn-modal-cancel">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="btn-modal-save">Save & Close</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 // ── EVENTS ───────────────────────────────────────────────
 function attachEvents() {
+  document.getElementById('btn-config').addEventListener('click', () =>
+    document.getElementById('config-modal').classList.add('open'));
+  attachConfigModalEvents();
+
   // Nav tabs
   document.getElementById('nav').addEventListener('click', e => {
     const tab = e.target.closest('[data-tab]');
@@ -148,6 +181,30 @@ function attachEvents() {
     const id = tab.dataset.tab;
     if (tab.classList.contains('locked')) return;
     renderTab(id);
+  });
+}
+
+function saveConfig() {
+  const key = document.getElementById('cfg-apikey').value.trim();
+  if (!key) {
+    document.getElementById('cfg-save-msg').innerHTML =
+      '<span style="color:#e05252">⚠ Please paste a valid API key first.</span>';
+    return;
+  }
+  CONFIG.apiKey = key;
+  localStorage.setItem('groq_api_key', key);
+  document.getElementById('config-modal').classList.remove('open');
+  const existing = document.getElementById('config-modal');
+  existing.outerHTML = buildConfigModal();
+  attachConfigModalEvents();
+}
+
+function attachConfigModalEvents() {
+  document.getElementById('btn-modal-cancel').addEventListener('click', () =>
+    document.getElementById('config-modal').classList.remove('open'));
+  document.getElementById('btn-modal-save').addEventListener('click', saveConfig);
+  document.getElementById('config-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
   });
 }
 
@@ -268,6 +325,10 @@ function renderIdeaPanel(panel) {
 async function handleGenerate() {
   const idea = document.getElementById('idea-input').value.trim();
   if (!idea) { showError('generate-error', 'Please enter a story idea first.'); return; }
+  if (!CONFIG.apiKey) {
+    showError('generate-error', 'Groq API Key is required. Click ⚙ API Key to add it.');
+    return;
+  }
   STATE.idea = idea;
   STATE.generating = true;
   clearError('generate-error');
@@ -326,6 +387,7 @@ async function callAI(prompt, maxTokens = 1800) {
     body: JSON.stringify({
       prompt,
       maxTokens,
+      apiKey:  CONFIG.apiKey,
       modelId: CONFIG.modelId,
     }),
   });
